@@ -1,0 +1,182 @@
+import requests
+import json
+from bs4 import BeautifulSoup
+from transformers import pipeline
+import csv
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+import time
+
+
+
+#cik = '000320193' # apple inc CIK
+
+#url = f"https://www.sec.gov/files/company_tickers.json"# to find the company CIK from its ticker (e.g., APPL CIK is 0000320193)
+#search_url = f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=8-K&count={count}&output=atom" # to find 8-Ks from CIK
+
+# cik = '000320193' # AAPL
+
+def fetch_cik(ticker):
+
+    driver = webdriver.Chrome()
+
+    # URL to fetch the JSON data
+    url = "https://www.sec.gov/files/company_tickers.json"
+    cik = None
+    # Open the URL
+    driver.get(url)
+
+    # Wait for the page to load (you can adjust the time as needed)
+    # time.sleep(5)  # Wait for 5 seconds to ensure the page is loaded
+
+    # Get the page source (HTML)
+    page_source = driver.find_element(By.TAG_NAME, 'pre').text
+
+    try:
+        # Extract JSON data from page source
+        json_data = json.loads(page_source)
+
+    except json.JSONDecodeError:
+        print("Error decoding the JSON response.")
+    for d in json_data:
+        if ticker == json_data[d]['ticker']:
+            cik = json_data[d]['cik_str']
+    # Close the browser
+    driver.quit()
+    return cik
+
+
+
+import xmltodict, json
+
+def fetch_8k_filings(ticker, cik, count):
+
+    driver = webdriver.Chrome()
+
+    # URL to fetch the JSON data
+    url = f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=8-K&count={count}&output=atom"
+    cik = None
+    # Open the URL
+    driver.get(url)
+
+    # Wait for the page to load (you can adjust the time as needed)
+    # time.sleep(5)  # Wait for 5 seconds to ensure the page is loaded
+
+    # Get the page source (HTML)
+    page_source = driver.find_element(By.TAG_NAME, 'pre').text
+    output_data = []
+
+    try:
+        # Extract JSON data from page source
+        xml_data = xmltodict.parse(str(page_source))
+        json_data = json.loads(json.dumps(xml_data))
+        for entry in json_data['feed']['entry']:
+            output_data.append(
+                {
+                    "Company Name": json_data['feed']['company-info']['conformed-name'],
+                    "Stock Name": ticker,
+                    "Filing Time": entry['content']['filing-date'],
+                    "New Product": "",
+                    "Product Description": "",
+                    "link": entry['content']['filing-href']
+                }
+            )
+
+    except json.JSONDecodeError:
+        print("Error decoding the JSON response.")
+    # Close the browser
+    driver.quit()
+    return output_data
+
+
+
+filings = fetch_8k_filings(ticker, cik, 10)
+filings
+
+def fetch_8k_summary(link):
+
+    driver = webdriver.Chrome()
+    
+    # URL to fetch the JSON data
+    url = link
+    print(url)
+    cik = None
+    # Open the URL
+    driver.get(url)
+
+    # Wait for the page to load (you can adjust the time as needed)
+    # time.sleep(5)  # Wait for 5 seconds to ensure the page is loaded
+
+    # Get the page source (HTML)
+    page_source = driver.find_element(By.TAG_NAME, 'pre').text
+    print(page_source)
+    output_data = []
+
+    try:
+        # Extract JSON data from page source
+        xml_data = xmltodict.parse(str(page_source))
+        json_data = json.loads(json.dumps(xml_data))
+        for entry in json_data['feed']['entry']:
+            output_data.append(
+                {
+                    "Company Name": json_data['feed']['company-info']['conformed-name'],
+                    "Stock Name": "AAPL",
+                    "Filing Time": entry['content']['filing-date'],
+                    "New Product": "",
+                    "Product Description": "",
+                    "link": entry['content']['filing-href']
+                }
+            )
+
+    except json.JSONDecodeError:
+        print("Error decoding the JSON response.")
+    # Close the browser
+    driver.quit()
+    return output_data
+
+ticker = "AAPL"
+cik = fetch_cik(ticker)
+
+
+filings = fetch_8k_filings(ticker, cik, 10)
+filings
+
+
+
+def fetch_8k_summary(url):
+
+    driver = webdriver.Chrome()
+    
+    # URL to fetch the JSON data
+    url = f"https://www.sec.gov/Archives/edgar/data/320193/000114036125005876/0001140361-25-005876-index.htm"
+    print(url)
+    cik = None
+    # Open the URL
+    driver.get(url)
+
+    # Wait for the page to load (you can adjust the time as needed)
+    # time.sleep(5)  # Wait for 5 seconds to ensure the page is loaded
+
+    # Get the page source (HTML)
+    page_source = driver.find_element(By.TAG_NAME, 'body').text
+    print(page_source)
+    output_data = []
+    driver.quit()
+   
+
+
+
+filings = fetch_8k_filings(ticker, cik, 10)
+options = webdriver.ChromeOptions()
+options.add_argument("--enable-javascript")
+driver = webdriver.Chrome(options=options)
+
+url = filings[0]['link']
+driver.get(url)
+page_source = driver.find_element(By.XPATH, '//*[@id="contentDiv"]/div[2]/div/table/tbody/tr[2]/td[3]/a').get_attribute('href')
+print(page_source)
+driver.get(page_source)
+time.sleep(30)
+file = driver.find_element(By.TAG_NAME, 'body').text
+print(file)
+driver.quit()
