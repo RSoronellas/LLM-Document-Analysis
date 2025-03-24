@@ -1,0 +1,138 @@
+import requests
+import json
+from bs4 import BeautifulSoup
+from transformers import pipeline
+import csv
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+import time
+
+
+
+#cik = '000320193' # apple inc CIK
+
+#url = f"https://www.sec.gov/files/company_tickers.json"# to find the company CIK from its ticker (e.g., APPL CIK is 0000320193)
+#search_url = f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=8-K&count={count}&output=atom" # to find 8-Ks from CIK
+
+cik = '000320193' # AAPL
+
+def fetch_cik(ticker):
+
+    driver = webdriver.Chrome()
+
+    # URL to fetch the JSON data
+    url = "https://www.sec.gov/files/company_tickers.json"
+    cik = None
+    # Open the URL
+    driver.get(url)
+
+    # Wait for the page to load (you can adjust the time as needed)
+    time.sleep(5)  # Wait for 5 seconds to ensure the page is loaded
+
+    # Get the page source (XML)
+    page_source = driver.find_element(By.TAG_NAME, 'pre').text
+
+    try:
+        # Extract JSON data from page source
+        json_data = json.loads(page_source)
+
+    except json.JSONDecodeError:
+        print("Error decoding the JSON response.")
+    for d in json_data:
+        if ticker == json_data[d]['ticker']:
+            cik = json_data[d]['cik_str']
+    # Close the browser
+    driver.quit()
+    return cik
+    
+
+
+def fetch_document_content(url):
+    response = requests.get(url)
+
+def fetch_8k_filings(cik, count=10):
+
+
+   # driver = webdriver.Chrome()
+
+    search_url = f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=8-K&count={count}&output=atom"
+    driver = webdriver.Chrome()
+
+   # return response.text  # Atom feed (XML format)
+
+
+def parse_8k_filings(xml_data):
+    soup = BeautifulSoup(xml_data, 'xml')
+    entries = soup.find_all('entry')
+    
+    filings = []
+    for entry in entries:
+        company_name = entry.find('conformed-name').text
+        filing_time = entry.find('filing-date').text
+        document_link = entry.find('link')['href']
+        
+        # Fetch document content (e.g., PDF or HTML)
+        # HTML or XML for now
+        document_content = fetch_document_content(document_link)
+        
+        filings.append({
+            'company_name': company_name,
+            'filing_time': filing_time,
+            'document_link': document_link,
+            'document_content': document_content,
+        })
+        
+    return filings
+
+nlp = pipeline("ner", model="dbmdz/bert-large-cased-finetuned-conll03-english")
+
+def extract_product_info(text):
+    entities = nlp(text)
+    
+    company_name = None
+    product_name = None
+    description = None
+    
+    for entity in entities:
+        if entity['label'] == 'ORG':
+            company_name = entity['word']
+        elif entity['label'] == 'PRODUCT':
+            product_name = entity['word']
+        # You can extend the NER model to capture the description based on proximity to product names
+        
+    return company_name, product_name, description
+
+def save_to_csv(data, filename="Stockoutput.csv"):
+    with open(filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Company Name', 'Stock Name', 'Filing Time', 'New Product', 'Product Description'])
+        
+        for row in data:
+            writer.writerow([row['company_name'], row['stock_name'], row['filing_time'], row['new_product'], row['product_description']])
+
+def process_filings(ticker):
+    cik = fetch_cik(ticker)
+    if cik is None:
+        print(f"Ticker {ticker} not found.")
+        return
+    
+    xml_data = fetch_8k_filings(cik)
+    filings = parse_8k_filings(xml_data)
+    
+    extracted_data = []
+    for filing in filings:
+        company_name, product_name, description = extract_product_info(filing['document_content'])
+        extracted_data.append({
+            'company_name': company_name,
+            'stock_name': ticker,  # You can fetch the stock name if needed
+            'filing_time': filing['filing_time'],
+            'new_product': product_name,
+            'product_description': description[:180],  # Ensure the description is under 180 chars
+        })
+    
+    save_to_csv(extracted_data)
+
+# Example usage
+process_filings('AAPL')
+
+

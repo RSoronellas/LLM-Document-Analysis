@@ -1,0 +1,54 @@
+import requests
+import json
+from bs4 import BeautifulSoup
+
+# Apple's 10-digit CIK (include leading zeros)
+CIK = "0000320193"
+HEADERS = {
+    "User-Agent": "rob@lmagrp.com",  # SEC requires identification
+    "Accept-Encoding": "gzip, deflate",
+    "Host": "data.sec.gov"
+}
+
+# Submissions URL for Apple
+url = f"https://data.sec.gov/submissions/CIK{CIK}.json"
+
+# Fetch and parse JSON data
+response = requests.get(url, headers=HEADERS)
+data = response.json()
+
+# Filter for 8-K filings
+eight_ks = []
+for i, form in enumerate(data["filings"]["recent"]["form"]):
+    if form == "8-K":
+        filing = {
+            "accessionNumber": data["filings"]["recent"]["accessionNumber"][i],
+            "filingDate": data["filings"]["recent"]["filingDate"][i],
+            "primaryDocument": data["filings"]["recent"]["primaryDocument"][i],
+            "reportDate": data["filings"]["recent"].get("reportDate", [None]*len(data["filings"]["recent"]["form"]))[i]
+        }
+        # Construct a link to the filing
+        acc_num = filing["accessionNumber"].replace("-", "")
+        filing["filingURL"] = f"https://www.sec.gov/Archives/edgar/data/{int(CIK)}/{acc_num}/{filing['primaryDocument']}"
+        eight_ks.append(filing)
+
+# Display results
+for filing in eight_ks:
+    print(json.dumps(filing, indent=2))
+
+# Scrape document content from each 8-K filing
+for filing in eight_ks:
+    filingURL = filing['filingURL']
+    response = requests.get(filingURL)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # Extract the document content (change this according to the actual HTML structure of the filing)
+    # Assuming 'document' tag contains the filing content; this might need adjustment.
+    document_content = soup.find('document')
+    
+    if document_content:
+        print(document_content.text.strip())
+    else:
+        print("No document content found.")
+    
+    print('---')
